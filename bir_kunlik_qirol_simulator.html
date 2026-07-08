@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bir Kunlik Qirol Simulator PRO</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM (Production versiyalari) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel CDN (JSX kodini brauzerda to'g'ridan-to'g'ri ishga tushirish uchun) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        @keyframes slideIn {
+            from { transform: translateY(12px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes glowPulse {
+            0% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); }
+            50% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.4); }
+            100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); }
+        }
+        .animate-slide-in {
+            animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-glow {
+            animation: glowPulse 2s infinite ease-in-out;
+        }
+        body {
+            background-color: #050816;
+        }
+    </style>
+</head>
+<body class="text-slate-100 font-sans relative overflow-x-hidden min-h-screen">
+
+    <!-- Ilova ildiz elementi (React shu yerga render qilinadi) -->
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const OY_NOMlARI = [
+            "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", 
+            "Iyul", "Avgust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"
+        ];
+
+        // Zanjirli va cheksiz ssenariylar bazasi
+        const REALISTIC_SCENARIOS = [
+            {
+                id: "sc_smog_winter",
+                title: "Poytaxtdagi Kuchli Smog va Havo Sifati Inqirozi",
+                desc: "Qish mavsumida ko'mir yoqilishi, sifatsiz yoqilg'i va pala-partish qurilishlar sabab poytaxt havosidagi zaharli zarrachalar (PM2.5) me'yordan 15 barobarga oshib ketdi. Kasalxonalarda nafas qisilishi bilan yotgan bolalar soni keskin ko'paydi. Jamoatchilik zudlik bilan chora ko'rishni talab qilmoqda.",
+                category: "Ekologiya & Sog'liq",
+                icon: "💨",
+                monthRestriction: [11, 0, 1],
+                options: [
+                    {
+                        text: "Poytaxt atrofidagi barcha ko'mir va og'ir sanoat korxonalarini vaqtincha yopish va jamoat transportini bepul qilish.",
+                        impact: { ekologiya: 20, sogliq: 15, iqtisod: -15, byudjet: -10, oligarxlar: -15, oddiyXalq: 15 }
+                    },
+                    {
+                        text: "Ekologik soliq joriy etish va eski avtomobillarning shahar markaziga kirishini to'liq taqiqlash.",
+                        impact: { ekologiya: 25, sogliq: 10, xalq: -15, byudjet: 12, oddiyXalq: -12, yoshlar: 5 }
+                    },
+                    {
+                        text: "Yirik korxonalar va turar-joylarga gaz filtrlari o'rnatish uchun g'aznadan favqulodda subsidiya ajratish.",
+                        impact: { byudjet: -20, ekologiya: 18, iqtisod: 10, oligarxlar: 15 }
+                    },
+                    {
+                        text: "Vaziyatni tabiiy shamol va ob-havoga topshirish, faqat aholiga bepul tibbiy niqoblar tarqatish.",
+                        impact: { ekologiya: -10, sogliq: -15, xalq: -20, byudjet: -2, oddiyXalq: -22 }
+                    }
+                ]
+            },
+            {
+                id: "sc_water_crisis",
+                title: "Transchegaraviy Suv Muammosi va Qurilishlar",
+                desc: "Yozning eng issiq pallasida qo'shni davlat daryo yuqorisida yangi gidroinshoot qurishni boshladi. Natijada bizning dehqonchilik viloyatlarimizga keladigan suv hajmi 35% ga kamaydi. Paxta va g'alla maydonlari qurimoqda. Fermerlar isyon ko'tarish arafasida.",
+                category: "Suv & Diplomatiya",
+                icon: "💧",
+                monthRestriction: [5, 6, 7],
+                options: [
+                    {
+                        text: "Qo'shni davlatga nisbatan qat'iy iqtisodiy cheklovlar kiritish va chegaraga qo'shin safarbar qilish.",
+                        impact: { xavfsizlik: 15, diplomatiya: -25, harbiylar: 20, iqtisod: -10, oddiyXalq: 5 }
+                    },
+                    {
+                        text: "Xalqaro sudlarga murojaat qilish va mintaqaviy tinchlik kelishuvi uchun diplomatik muzokaralar boshlash.",
+                        impact: { diplomatiya: 20, xavfsizlik: 5, xalq: 8, byudjet: -4 }
+                    },
+                    {
+                        text: "Zudlik bilan tomchilatib sug'orish tizimiga o'tish va yangi suv omborlari qurish uchun katta mablag' yo'naltirish.",
+                        impact: { ekologiya: 22, byudjet: -18, iqtisod: 12, oddiyXalq: 15 }
+                    },
+                    {
+                        text: "Zarar ko'rgan fermerlarga kompensatsiya to'lash, ammo daryo masalasiga aralashmaslik.",
+                        impact: { byudjet: -15, xalq: 10, diplomatiya: 10, ekologiya: -15, oddiyXalq: 15 }
+                    }
+                ]
+            },
+            {
+                id: "sc_auto_monopoly",
+                title: "Milliy Avto-Sanoat Monopoliyasi va Bojlar",
+                desc: "Yagona davlat avtomobil zavodi ishlab chiqargan mashinalar narxi ichki bozorda keskin oshdi, navbatlar esa 1 yilgacha cho'zildi. Xalq chet el mashinalari uchun bojxona to'lovlarini (rastamojka) butunlay nolga tushirishni va monopoliyani tugatishni talab qilmoqda. Sanoat vaziri bunga qarshi.",
+                category: "Iqtisodiyot & Biznes",
+                icon: "🚗",
+                options: [
+                    {
+                        text: "Import bojlarini to'liq nolga tushirish va bozorda erkin raqobat muhitini yaratish.",
+                        impact: { iqtisod: 25, xalq: 28, byudjet: -15, oligarxlar: -30, oddiyXalq: 30, yoshlar: 20 }
+                    },
+                    {
+                        text: "Bojlarni 50% ga kamaytirish, ammo milliy zavodni modernizatsiya qilish uchun qo'shimcha investitsiya berish.",
+                        impact: { iqtisod: 15, xalq: 15, byudjet: -8, oligarxlar: -10, oddiyXalq: 15 }
+                    },
+                    {
+                        text: "Bojlarni o'zgarishsiz qoldirish, biroq mahalliy avtomashinalar uchun foizsiz kreditlarni ko'paytirish.",
+                        impact: { byudjet: -12, oligarxlar: 20, xalq: -10, oddiyXalq: 5, inflyatsiya: 5 }
+                    },
+                    {
+                        text: "Zavodni xorijiy konsern egaligiga xususiylashtirish va elektromobillar importini bojsiz qilish.",
+                        impact: { iqtisod: 20, innovatsiya: 25, oligarxlar: -12, yoshlar: 18, byudjet: 15 }
+                    }
+                ]
+            }
+        ];
+
+        const MICRO_BILLS = [
+            {
+                id: "mb_public_transport",
+                text: "Jamoat transportida talabalar va nafaqaxo'rlar uchun bepul yurish tizimini joriy etish.",
+                impact: { byudjet: -8, xalq: 12, oddiyXalq: 15, yoshlar: 12, iqtisod: 2 }
+            },
+            {
+                id: "mb_crypto_tax",
+                text: "Mamlakatda kriptovalyuta savdosini qonuniylashtirish va unga 10% daromad solig'i solish.",
+                impact: { byudjet: 15, innovatsiya: 20, oligarxlar: 10, yoshlar: 15, ulamolar: -10 }
+            },
+            {
+                id: "mb_plastic_ban",
+                text: "Bir marta ishlatiladigan plastik idish va paketlarni ishlab chiqarish hamda sotishni to'liq taqiqlash.",
+                impact: { ekologiya: 18, byudjet: -5, oligarxlar: -12, oddiyXalq: -5 }
+            }
+        ];
+
+        const safeParseJSON = (text) => {
+            if (!text || typeof text !== 'string') return null;
+            let sanitized = text.trim();
+            if (sanitized.startsWith('```')) {
+                sanitized = sanitized.replace(/^```(?:json)?\s*/i, '');
+                sanitized = sanitized.replace(/\s*```$/, '');
+            }
+            try {
+                return JSON.parse(sanitized);
+            } catch (e) {
+                console.error("JSON Parsing failed:", e);
+                return null;
+            }
+        };
+
+        function App() {
+            const [gameState, setGameState] = useState('landing'); // landing, setup, playing, result, ledger, gameover
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [apiKey, setApiKey] = useState('');
+            const [isAiActive, setIsAiActive] = useState(false);
+            const [soundEnabled, setSoundEnabled] = useState(true);
+
+            const [currentYear, setCurrentYear] = useState(2026);
+            const [currentMonthIdx, setCurrentMonthIdx] = useState(0); 
+            const [currentDecade, setCurrentDecade] = useState(1); 
+            const [turnCount, setTurnCount] = useState(1);
+            const [difficultyLevel, setDifficultyLevel] = useState(1);
+            const [xp, setXp] = useState(0);
+
+            // Lobbi guruhlar
+            const [factions, setFactions] = useState({
+                harbiylar: 50,
+                oligarxlar: 50,
+                oddiyXalq: 50,
+                yoshlar: 60,
+                ulamolar: 50
+            });
+
+            const [country, setCountry] = useState({
+                name: "Turon Ozod Respublikasi",
+                capital: "Samarqand",
+                currency: "Sum",
+                population: 36000000,
+                area: 447400,
+                climate: "Kontinental",
+                stability: 70
+            });
+
+            const [sliders, setSliders] = useState({
+                soliqRate: 15,
+                ijtimoiyHimoya: 15,
+                mudofaaByudjet: 15,
+                talimSogliq: 18
+            });
+
+            const [stats, setStats] = useState({
+                byudjet: 60,
+                iqtisod: 55,
+                xalq: 50,
+                adolat: 45,
+                sogliq: 50,
+                talim: 50,
+                xavfsizlik: 65,
+                ekologiya: 45,
+                diplomatiya: 55,
+                innovatsiya: 40,
+                energiya: 50,
+                inflyatsiya: 12,
+                ishsizlik: 8
+            });
+
+            const [statsHistory, setStatsHistory] = useState([
+                { label: 'Jan/B', iqtisod: 55, xalq: 50, byudjet: 60, xavfsizlik: 65 }
+            ]);
+
+            const [currentIncident, setCurrentIncident] = useState(REALISTIC_SCENARIOS[0]);
+            const [decision, setDecision] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [activeBill, setActiveBill] = useState(MICRO_BILLS[0]);
+            const [billHandled, setBillHandled] = useState(false);
+
+            const [ledgerReport, setLedgerReport] = useState(null);
+            const [consequences, setConsequences] = useState(null);
+            const [pastDecisions, setPastDecisions] = useState([]);
+            const [notifications, setNotifications] = useState([]);
+            const [geoGrounding, setGeoGrounding] = useState(null);
+            const [isSearchingGrounding, setIsSearchingGrounding] = useState(false);
+
+            const cabinetAdvisors = [
+                { key: 'finance', name: 'Farida Karimova', role: 'Iqtisodiyot Vaziri', emoji: '👩‍💼', alignment: 'oligarxlar', welcome: "Assalomu alaykum, muhtaram davlat rahbari. Budjet xarajatlari va soliq islohotlari bo'yicha hisobotlarim tayyor." },
+                { key: 'military', name: 'General Sobir Rahimov', role: 'Milliy Xavfsizlik Qoʻmondoni', emoji: '⚔️', alignment: 'harbiylar', welcome: "General Rahimov aloqada! Davlatimiz mudofaasi va strategik xavfsizligimiz uchun har qanday buyruqni bajarishga tayyormiz." },
+                { key: 'people', name: 'Umid Hakimov', role: 'Xalq Vakillari Kengashi Raisi', emoji: '👥', alignment: 'oddiyXalq', welcome: "Xalqimiz kayfiyati va ehtiyojlarini yetkazish mening vazifamdir. Xalq roziligi – davlatning chin poydevori!" },
+                { key: 'youth', name: 'Zaynab Ergasheva', role: 'Yoshlar & IT Sektori Spikeri', emoji: '🚀', alignment: 'yoshlar', welcome: "Salom, Janob Hukmdor! Yangi innovatsion texnologiyalar va startaplar dunyosini poytaxtda kutib olishga tayyormisiz?" },
+                { key: 'cleric', name: 'Muftiy Hazratlari', role: 'Diniy-Ma’naviy Idora Rahbari', emoji: '🕌', alignment: 'ulamolar', welcome: "Bismillahir rahmanir rahim. Adolat va ezgulik yoʻlida qilayotgan ishlaringizda ilohiy madad yor boʻlsin." }
+            ];
+
+            const [selectedAdvisor, setSelectedAdvisor] = useState(cabinetAdvisors[0]);
+            const [chatHistory, setChatHistory] = useState({
+                finance: [], military: [], people: [], youth: [], cleric: []
+            });
+            const [chatInput, setChatInput] = useState('');
+            const [isAdvisorTyping, setIsAdvisorTyping] = useState(false);
+
+            const [customDecree, setCustomDecree] = useState('');
+            const [isDecreeLoading, setIsDecreeLoading] = useState(false);
+            const [decreeResult, setDecreeResult] = useState(null);
+
+            const [nationSpeech, setNationSpeech] = useState('');
+            const [isSpeechLoading, setIsSpeechLoading] = useState(false);
+            const [speechResult, setSpeechResult] = useState(null);
+
+            const chatEndRef = useRef(null);
+
+            useEffect(() => {
+                setActiveBill(MICRO_BILLS[Math.floor(Math.random() * MICRO_BILLS.length)]);
+            }, [turnCount]);
+
+            useEffect(() => {
+                chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [chatHistory, isAdvisorTyping]);
+
+            const playSound = (type) => {
+                if (!soundEnabled) return;
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    if (type === 'click') {
+                        osc.frequency.setValueAtTime(350, ctx.currentTime);
+                        gain.gain.setValueAtTime(0.04, ctx.currentTime);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.08);
+                    } else if (type === 'success') {
+                        osc.frequency.setValueAtTime(440, ctx.currentTime);
+                        osc.frequency.setValueAtTime(554, ctx.currentTime + 0.08);
+                        osc.frequency.setValueAtTime(659, ctx.currentTime + 0.16);
+                        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.3);
+                    } else if (type === 'alert') {
+                        osc.frequency.setValueAtTime(220, ctx.currentTime);
+                        osc.frequency.setValueAtTime(180, ctx.currentTime + 0.1);
+                        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.4);
+                    } else if (type === 'gameover') {
+                        osc.frequency.setValueAtTime(150, ctx.currentTime);
+                        osc.frequency.setValueAtTime(100, ctx.currentTime + 0.2);
+                        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.8);
+                    }
+                } catch (e) {
+                    console.log("Audio API cheklovi");
+                }
+            };
+
+            const addNotification = (text, type = 'info') => {
+                const id = Date.now();
+                setNotifications(prev => [...prev, { id, text, type }]);
+                setTimeout(() => {
+                    setNotifications(prev => prev.filter(n => n.id !== id));
+                }, 4500);
+            };
+
+            const handleSliderChange = (name, value) => {
+                playSound('click');
+                setSliders(prev => {
+                    const updated = { ...prev, [name]: parseInt(value) };
+                    
+                    setStats(currentStats => {
+                        let newStats = { ...currentStats };
+                        const diff = value - prev[name];
+                        const scale = 1 + (difficultyLevel - 1) * 0.15;
+
+                        if (name === 'soliqRate') {
+                            newStats.byudjet = Math.min(100, Math.max(0, newStats.byudjet + diff * 1.5));
+                            newStats.xalq = Math.min(100, Math.max(0, newStats.xalq - diff * 1.0 * scale));
+                            newStats.iqtisod = Math.min(100, Math.max(0, newStats.iqtisod - diff * 0.8 * scale));
+                        } else if (name === 'ijtimoiyHimoya') {
+                            newStats.xalq = Math.min(100, Math.max(0, newStats.xalq + diff * 0.8));
+                            newStats.byudjet = Math.min(100, Math.max(0, newStats.byudjet - diff * 1.2 * scale));
+                            newStats.inflyatsiya = Math.max(1, Math.min(45, newStats.inflyatsiya + diff * 0.15));
+                        } else if (name === 'mudofaaByudjet') {
+                            newStats.xavfsizlik = Math.min(100, Math.max(0, newStats.xavfsizlik + diff * 1.0));
+                            newStats.byudjet = Math.min(100, Math.max(0, newStats.byudjet - diff * 1.1 * scale));
+                        } else if (name === 'talimSogliq') {
+                            newStats.talim = Math.min(100, Math.max(0, newStats.talim + diff * 0.5));
+                            newStats.sogliq = Math.min(100, Math.max(0, newStats.sogliq + diff * 0.5));
+                            newStats.byudjet = Math.min(100, Math.max(0, newStats.byudjet - diff * 1.3 * scale));
+                        }
+
+                        return newStats;
+                    });
+
+                    return updated;
+                });
+            };
+
+            const handleBillDecision = (approved) => {
+                playSound('click');
+                setBillHandled(true);
+                addNotification(approved ? "Qonun imzolandi!" : "Qonun loyihasiga veto qo'yildi!", approved ? "success" : "info");
+
+                const multiplier = approved ? 1.0 : -0.5;
+                const impact = activeBill.impact;
+
+                setStats(prev => {
+                    let next = { ...prev };
+                    Object.keys(impact).forEach(key => {
+                        if (next[key] !== undefined) {
+                            next[key] = Math.max(5, Math.min(95, next[key] + Math.round(impact[key] * multiplier * 0.7)));
+                        }
+                    });
+                    return next;
+                });
+
+                setFactions(prev => {
+                    let next = { ...prev };
+                    Object.keys(impact).forEach(key => {
+                        if (next[key] !== undefined) {
+                            next[key] = Math.max(5, Math.min(95, next[key] + Math.round(impact[key] * multiplier * 0.8)));
+                        }
+                    });
+                    return next;
+                });
+            };
+
+            const checkGameOver = (currentStats, currentFactions) => {
+                let cause = null;
+                let title = "";
+                let description = "";
+
+                if (currentStats.byudjet <= 5) {
+                    cause = "bankrupt";
+                    title = "💸 Davlat Bankrot Bo'ldi";
+                    description = "Siz davlat g'aznasini butunlay bo'shatib qo'ydingiz. Tashqi qarzlar va valyuta inqirozi natijasida hukumat to'liq nazoratni yo'qotdi.";
+                } else if (currentStats.xalq <= 5) {
+                    cause = "revolution";
+                    title = "🔥 Ommaviy Xalq Inqilobi";
+                    description = "Oddiy aholi sabrining oxirgi chegarasiga yetdi. Saroyingiz qurshab olindi va siz qochishga majbur bo'ldingiz.";
+                } else if (currentStats.xavfsizlik <= 5) {
+                    cause = "coup";
+                    title = "🛡️ Harbiy To'ntarish";
+                    description = "Milliy xavfsizlik inqirozi natijasida generallar harbiy xunta tuzib, hokimiyatni qo'lga kiritishdi.";
+                }
+
+                Object.keys(currentFactions).forEach(f => {
+                    if (currentFactions[f] <= 4) {
+                        cause = f + "_rebellion";
+                        if (f === 'harbiylar') {
+                            title = "⚔️ Generallar Fitnasi";
+                            description = "Harbiylar sizga qarshi isyon ko'tarishdi va siz taxtdan mahrum etildingiz.";
+                        } else if (f === 'oligarxlar') {
+                            title = "💰 Oligarxlar Sabotaji";
+                            description = "Yirik sarmoyadorlar mamlakat iqtisodiyotini falajlashdi va hukumatni ag'darishdi.";
+                        } else if (f === 'oddiyXalq') {
+                            title = "👥 Ishchilar Boykoti";
+                            description = "Butun mamlakat bo'ylab ommaviy ish tashlashlar sababli boshqaruv to'xtab qoldi.";
+                        }
+                    }
+                });
+
+                if (cause) {
+                    playSound('gameover');
+                    setGameState('gameover');
+                    setConsequences({ title, description, cause });
+                    return true;
+                }
+                return false;
+            };
+
+            const calculateMonthlyLedger = () => {
+                const soliqRevenue = Math.round(sliders.soliqRate * 3.2 + stats.iqtisod * 0.5);
+                const ijtimoiyCost = Math.round(sliders.ijtimoiyHimoya * 1.6);
+                const harbiyCost = Math.round(sliders.mudofaaByudjet * 1.5);
+                const talimCost = Math.round(sliders.talimSogliq * 1.8);
+                const netBalance = soliqRevenue - (ijtimoiyCost + harbiyCost + talimCost);
+
+                return { soliqRevenue, ijtimoiyCost, harbiyCost, talimCost, netBalance };
+            };
+
+            const generateNextIncident = async () => {
+                setIsLoading(true);
+                setDecision('');
+                setConsequences('');
+                setBillHandled(false);
+                setGeoGrounding(null);
+
+                let nextDecade = currentDecade + 1;
+                let nextMonthIdx = currentMonthIdx;
+                let nextYear = currentYear;
+
+                if (nextDecade > 3) {
+                    nextDecade = 1;
+                    nextMonthIdx = currentMonthIdx + 1;
+                    if (nextMonthIdx > 11) {
+                        nextMonthIdx = 0;
+                        nextYear = currentYear + 1;
+                    }
+                }
+
+                setCurrentDecade(nextDecade);
+                setCurrentMonthIdx(nextMonthIdx);
+                setCurrentYear(nextYear);
+
+                const nextTurnCount = turnCount + 1;
+                setTurnCount(nextTurnCount);
+
+                const currentDifficulty = Math.min(10, Math.floor(nextTurnCount / 12) + 1);
+                setDifficultyLevel(currentDifficulty);
+
+                if (nextDecade === 1) {
+                    const ledger = calculateMonthlyLedger();
+                    setLedgerReport(ledger);
+
+                    setStats(prev => {
+                        const updatedByudjet = Math.max(5, Math.min(100, prev.byudjet + ledger.netBalance));
+                        return { ...prev, byudjet: updatedByudjet };
+                    });
+
+                    const dateLabel = `${OY_NOMlARI[nextMonthIdx].substring(0, 3)}-B`;
+                    setStatsHistory(prev => [...prev, {
+                        label: dateLabel,
+                        iqtisod: stats.iqtisod,
+                        xalq: stats.xalq,
+                        byudjet: stats.byudjet,
+                        xavfsizlik: stats.xavfsizlik
+                    }]);
+
+                    setGameState('ledger');
+                    setIsLoading(false);
+                    playSound('success');
+                    addNotification("Oylik budjet balansi shakllandi!", "success");
+                    return;
+                }
+
+                // AI yordamida dinamik ssenariy generatsiyasi
+                let isApiSuccess = false;
+                if (apiKey && apiKey.trim().length > 0) {
+                    const prompt = `Siz "Bir Kunlik Qirol" boshqaruv o'yinining inqiroz generatorisiz.
+Sana hozir: ${currentYear}-yil, ${OY_NOMlARI[nextMonthIdx]} oyi. O'yin qiyinchilik darajasi (1-10): ${currentDifficulty}
+Iltimos, o'zbek tilida butunlay YANGI, takrorlanmas inqirozni 4 ta qaror varianti bilan faqat JSON formatda qaytaring:
+{
+  "title": "Ssenariy nomi",
+  "desc": "Batafsil tavsif",
+  "category": "Soha",
+  "icon": "Emoji",
+  "options": [
+    { "text": "1-tanlov", "impact": { "byudjet": -10, "xalq": 10 } },
+    { "text": "2-tanlov", "impact": { "byudjet": 15, "xalq": -15 } },
+    { "text": "3-tanlov", "impact": { "byudjet": -5, "xalq": 5 } },
+    { "text": "4-tanlov", "impact": { "byudjet": -12, "xalq": 8 } }
+  ]
+}`;
+
+                    try {
+                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+                        const response = await fetch(apiUrl, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { responseMimeType: "application/json" }
+                          })
+                        });
+
+                        const result = await response.json();
+                        const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        const generated = safeParseJSON(jsonText);
+
+                        if (generated && generated.title && generated.options) {
+                            setCurrentIncident(generated);
+                            addNotification("🤖 Sun'iy Intellekt yangi ssenariyni shakllantirdi!", "success");
+                            isApiSuccess = true;
+                        }
+                    } catch (err) {
+                        console.warn("AI xizmati vaqtincha offline.");
+                    }
+                }
+
+                if (!isApiSuccess) {
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    const applicable = REALISTIC_SCENARIOS;
+                    const chosen = applicable[Math.floor(Math.random() * applicable.length)];
+                    setCurrentIncident(chosen);
+                    addNotification("ℹ️ Mahalliy tizimdan ssenariy yuklandi.", "info");
+                }
+
+                setGameState('playing');
+                setActiveTab('dashboard');
+                setIsLoading(false);
+            };
+
+            const handleSimulation = async (userDecision) => {
+                if (!userDecision.trim()) return;
+                setIsLoading(true);
+                playSound('click');
+
+                let data = null;
+                let isApiSuccess = false;
+
+                if (apiKey && apiKey.trim().length > 0) {
+                    const prompt = `Foydalanuvchi quyidagi qarorni qabul qildi.
+Muammo: "${currentIncident.title} - ${currentIncident.desc}"
+Hukmdor qarori: "${userDecision}"
+Iltimos, oqibatlarni baholang va o'zbek tilida quyidagi JSON formatida qaytaring:
+{
+  "summary": "Qaror oqibatlari batafsil sharhi (O'zbek tilida)",
+  "statsImpact": {
+    "byudjet": -10,
+    "iqtisod": 8,
+    "xalq": 12,
+    "xavfsizlik": -2
+  },
+  "timeline": {
+    "shortTerm": "Qisqa muddatli natija",
+    "midTerm": "O'rta muddatli natija",
+    "longTerm": "Uzoq muddatli natija"
+  },
+  "advisors": [],
+  "citizens": [],
+  "media": []
+}`;
+
+                    try {
+                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+                        const response = await fetch(apiUrl, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { responseMimeType: "application/json" }
+                          })
+                        });
+
+                        const result = await response.json();
+                        const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        const parsed = safeParseJSON(jsonText);
+
+                        if (parsed && parsed.summary && parsed.statsImpact) {
+                            data = parsed;
+                            isApiSuccess = true;
+                            addNotification("🤖 AI simulyatsiya hisobini yakunladi!", "success");
+                        }
+                    } catch (err) {
+                        console.warn("AI tahlil xizmati band.");
+                    }
+                }
+
+                if (!isApiSuccess) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    const matchedOption = currentIncident.options?.find(opt => opt.text === userDecision) || { text: userDecision, impact: { byudjet: -5, xalq: 5 } };
+                    const baseImpact = matchedOption.impact || { byudjet: -5, xalq: 5 };
+
+                    data = {
+                        summary: `Siz qabul qilgan "${userDecision.substring(0, 60)}..." qarori barcha idoralarda tasdiqlandi. Kutilgan makro barqarorlik ta'minlanadi.`,
+                        statsImpact: baseImpact,
+                        timeline: {
+                            shortTerm: "Dastlabki ijobiy va salbiy balans o'zgarishi sodir bo'ldi.",
+                            midTerm: "Ushbu qaror kelgusi oylarga ta'sir o'tkazishda davom etadi.",
+                            longTerm: "Davlat suvereniteti va barqarorlik mustahkamlanadi."
+                        },
+                        advisors: [
+                            { role: "Iqtisodiy Maslahatchi", name: "Farida Karimova", opinion: "G'aznamiz uchun to'g'ri qadam.", support: true }
+                        ],
+                        citizens: [
+                            { job: "Shahar Tadbirkori", comment: "Bunday sharoitda ishlash ancha qulay.", satisfied: true }
+                        ],
+                        media: [
+                            { source: "Milliy TV", headline: "Davlat rahbari favqulodda chora-tadbirlar rejasini e'lon qildi." }
+                        ]
+                    };
+                }
+
+                // Statistikalarni yangilash
+                setStats(currentStats => {
+                    let newStats = { ...currentStats };
+                    if (data && data.statsImpact) {
+                        Object.keys(data.statsImpact).forEach(key => {
+                            if (newStats[key] !== undefined) {
+                                newStats[key] = Math.max(5, Math.min(100, newStats[key] + data.statsImpact[key]));
+                            }
+                        });
+                    }
+                    return newStats;
+                });
+
+                setFactions(currentFactions => {
+                    let nextFactions = { ...currentFactions };
+                    if (data && data.statsImpact) {
+                        Object.keys(data.statsImpact).forEach(key => {
+                            if (nextFactions[key] !== undefined) {
+                                nextFactions[key] = Math.max(5, Math.min(100, nextFactions[key] + data.statsImpact[key]));
+                            }
+                        });
+                    }
+                    checkGameOver(stats, nextFactions);
+                    return nextFactions;
+                });
+
+                setXp(prev => prev + 150);
+                setConsequences(data);
+                setPastDecisions(prev => [{
+                    year: currentYear,
+                    month: OY_NOMlARI[currentMonthIdx],
+                    decade: currentDecade === 1 ? 'Boshi' : currentDecade === 2 ? 'Oʻrtasi' : 'Oxiri',
+                    incident: currentIncident.title,
+                    decision: userDecision,
+                    summary: data ? data.summary : "Qaror imzolandi."
+                }, ...prev]);
+
+                setGameState('result');
+                playSound('success');
+                setIsLoading(false);
+            };
+
+            const handleAdvisorChat = async () => {
+                if (!chatInput.trim()) return;
+                playSound('click');
+                const userMessage = chatInput;
+                setChatInput('');
+
+                setChatHistory(prev => ({
+                    ...prev,
+                    [selectedAdvisor.key]: [...prev[selectedAdvisor.key], { role: 'user', text: userMessage }]
+                }));
+
+                setIsAdvisorTyping(true);
+
+                if (apiKey && apiKey.trim().length > 0) {
+                    const systemPrompt = `Siz ${selectedAdvisor.name} ismli ${selectedAdvisor.role}siz.
+Hozirgi ko'rsatkichlar: G'azna: ${stats.byudjet}%, Iqtisodiyot: ${stats.iqtisod}%, Xalq roziligi: ${stats.xalq}%.
+Hukmdorning murojaatiga o'zbek tilida juda qisqa va lo'nda javob qaytaring.`;
+
+                    try {
+                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+                        const response = await fetch(apiUrl, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+                            systemInstruction: { parts: [{ text: systemPrompt }] }
+                          })
+                        });
+
+                        const result = await response.json();
+                        const responseText = result?.candidates?.[0]?.content?.parts?.[0]?.text || "Menda hozircha boshqa ma'lumotlar yo'q.";
+
+                        setChatHistory(prev => ({
+                            ...prev,
+                            [selectedAdvisor.key]: [...prev[selectedAdvisor.key], { role: 'model', text: responseText }]
+                        }));
+                    } catch (err) {
+                        console.error("AI chat xatosi.");
+                    }
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, 600));
+                    setChatHistory(prev => ({
+                        ...prev,
+                        [selectedAdvisor.key]: [...prev[selectedAdvisor.key], { role: 'model', text: `Hukmdorim, ayni damda barcha hisobotlar joyida. Gʻaznamiz ${stats.byudjet}% darajada barqaror.` }]
+                    }));
+                }
+
+                setIsAdvisorTyping(false);
+            };
+
+            const handleCustomDecreeSubmit = async () => {
+                if (!customDecree.trim()) return;
+                setIsDecreeLoading(true);
+                playSound('click');
+
+                if (apiKey && apiKey.trim().length > 0) {
+                    const prompt = `Erkin matndagi farmon: "${customDecree}". Iltimos, buni tahlil qiling va o'zbek tilida JSON shaklida qaytaring:
+{
+  "summary": "Tahlil matni",
+  "impact": { "byudjet": -5, "iqtisod": 10, "xalq": 5 },
+  "publicReaction": "Munosabat",
+  "headline": "OAV sarlavhasi"
+}`;
+
+                    try {
+                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+                        const response = await fetch(apiUrl, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { responseMimeType: "application/json" }
+                          })
+                        });
+
+                        const result = await response.json();
+                        const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        const parsed = safeParseJSON(jsonText);
+
+                        if (parsed && parsed.summary && parsed.impact) {
+                            setDecreeResult(parsed);
+                            addNotification("📜 Yangi farmon tahlil qilindi!", "success");
+                        }
+                    } catch (err) {
+                        console.error("AI tahlil xatosi.");
+                    }
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, 600));
+                    setDecreeResult({
+                        summary: `Siz yozgan erkin farmon barcha vazirliklarda tasdiqlandi.`,
+                        impact: { byudjet: -5, iqtisod: 5, xalq: 5 },
+                        publicReaction: "Odamlar ushbu farmonni yaxshi kutib olishdi.",
+                        headline: "KUN.UZ: Qirollik yangi tarixiy farmonni qabul qildi!"
+                    });
+                }
+
+                setIsDecreeLoading(false);
+            };
+
+            const applyDecreeImpact = () => {
+                if (!decreeResult) return;
+                playSound('success');
+
+                setStats(currentStats => {
+                    let newStats = { ...currentStats };
+                    Object.keys(decreeResult.impact).forEach(key => {
+                        if (newStats[key] !== undefined) {
+                            newStats[key] = Math.max(5, Math.min(100, newStats[key] + decreeResult.impact[key]));
+                        }
+                    });
+                    return newStats;
+                });
+
+                setPastDecisions(prev => [{
+                    year: currentYear,
+                    month: OY_NOMlARI[currentMonthIdx],
+                    decade: "Farmon",
+                    incident: "Farmon: " + decreeResult.headline,
+                    decision: customDecree,
+                    summary: decreeResult.summary
+                }, ...prev]);
+
+                addNotification("Farmon ko'rsatkichlari tatbiq etildi!", "success");
+                setCustomDecree('');
+                setDecreeResult(null);
+                setActiveTab('dashboard');
+            };
+
+            const handleResetGame = () => {
+                playSound('click');
+                setGameState('setup');
+                setTurnCount(1);
+                setCurrentYear(2026);
+                setCurrentMonthIdx(0);
+                setCurrentDecade(1);
+                setStats({
+                    byudjet: 60,
+                    iqtisod: 55,
+                    xalq: 50,
+                    adolat: 45,
+                    sogliq: 50,
+                    talim: 50,
+                    xavfsizlik: 65,
+                    ekologiya: 45,
+                    diplomatiya: 55,
+                    innovatsiya: 40,
+                    energiya: 50,
+                    inflyatsiya: 12,
+                    ishsizlik: 8
+                });
+                setFactions({
+                    harbiylar: 50,
+                    oligarxlar: 50,
+                    oddiyXalq: 50,
+                    yoshlar: 60,
+                    ulamolar: 50
+                });
+            };
+
+            return (
+                <div className="min-h-screen text-slate-100 flex flex-col justify-between font-sans relative overflow-x-hidden bg-[#050816]">
+                    
+                    {/* Floating Notifications */}
+                    <div className="fixed top-4 right-4 z-50 space-y-2 pointer-events-none max-w-sm w-full">
+                        {notifications.map(n => (
+                            <div key={n.id} className="p-3.5 rounded-xl backdrop-blur-md border border-slate-850 shadow-2xl flex items-center gap-2.5 animate-slide-in bg-slate-950/95 text-xs text-slate-200">
+                                <span className={n.type === 'success' ? 'text-emerald-400' : 'text-amber-400'}>●</span>
+                                <span>{n.text}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Header bar */}
+                    <header className="border-b border-slate-900/90 backdrop-blur-md bg-slate-950/40 sticky top-0 z-40 px-6 py-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setGameState('landing')}>
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-400 via-amber-500 to-indigo-600 flex items-center justify-center shadow-lg text-xl">
+                                👑
+                            </div>
+                            <div>
+                                <h1 className="text-md md:text-lg font-black tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+                                    Qirol Simulator PRO
+                                </h1>
+                                <p className="text-[9px] text-amber-500 font-mono tracking-widest uppercase font-bold">Ultra-Premium AI Edition</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-xs">
+                            <button 
+                                onClick={() => { setSoundEnabled(!soundEnabled); playSound('click'); }} 
+                                className="p-2 rounded-lg hover:bg-slate-800/60 border border-slate-850 text-slate-300 transition-all text-xs"
+                            >
+                                {soundEnabled ? "🔊 Ovoz yoqilgan" : "🔇 Ovoz o'chirilgan"}
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Main Container */}
+                    <main className="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4 md:p-6 justify-center z-10">
+                        
+                        {/* 1. LANDING PAGE */}
+                        {gameState === 'landing' && (
+                            <div className="grid lg:grid-cols-12 gap-10 items-center py-6">
+                                <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
+                                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-xs font-mono tracking-wide">
+                                        👑 CIVILIZATION & AI DECREE SIMULATION PLATFORM
+                                    </div>
+                                    <h2 className="text-4xl md:text-6xl font-black tracking-tight leading-tight">
+                                        Bir kunlik qaroring <br />
+                                        <span className="bg-gradient-to-r from-yellow-400 via-amber-300 to-emerald-400 bg-clip-text text-transparent">
+                                            butun avlodlar
+                                        </span> taqdirini belgilaydi.
+                                    </h2>
+                                    <p className="text-slate-400 text-xs md:text-sm max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                                        Davlat rahbariyati har 10 kunda (dekada) yangi sinovlar, ssenariylar va kutilmagan qonun tashabbuslariga duch keladi. Maslahatchilaringiz bilan jonli suhbatlashing, erkin farmonlar imzolang va xalqqa murojaat qiling!
+                                    </p>
+
+                                    <div className="max-w-md mx-auto lg:mx-0 p-4 rounded-xl bg-slate-950/90 border border-slate-850 text-left space-y-3 shadow-2xl animate-glow">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gemini API Kalit (AI-Powered rejim uchun)</label>
+                                            <span className="text-[9px] text-emerald-500 font-mono font-bold">100% Xavfsiz</span>
+                                        </div>
+                                        <input 
+                                            type="password" 
+                                            placeholder="Haqiqiy AI chat va Erkin farmonlar uchun API key kiriting..."
+                                            value={apiKey}
+                                            onChange={(e) => {
+                                                setApiKey(e.target.value);
+                                                setIsAiActive(e.target.value.trim().length > 0);
+                                            }}
+                                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
+                                        <button 
+                                            onClick={() => { setGameState('setup'); playSound('click'); }}
+                                            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-yellow-500 via-amber-600 to-indigo-600 text-slate-950 font-bold hover:shadow-2xl hover:shadow-indigo-500/20 transform hover:-translate-y-1 transition-all duration-300 text-xs"
+                                        >
+                                            👑 Davlatni Boshlash
+                                        </button>
+                                        <button 
+                                            onClick={() => { setGameState('setup'); setIsAiActive(false); playSound('click'); }}
+                                            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-slate-900/60 border border-slate-800 hover:bg-slate-850 font-semibold transition-all text-xs text-slate-200"
+                                        >
+                                            🎬 Demo Simulyatsiya
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="lg:col-span-5 flex justify-center relative">
+                                    <div className="w-80 h-80 rounded-full bg-gradient-to-tr from-indigo-500/10 to-emerald-500/10 absolute animate-pulse blur-3xl pointer-events-none" />
+                                    <div className="w-72 h-72 rounded-full border border-slate-800/70 flex items-center justify-center p-6 bg-slate-950/40 backdrop-blur-md relative shadow-2xl">
+                                        <div className="text-center space-y-3">
+                                            <div className="text-7xl animate-bounce">🏛️</div>
+                                            <div className="font-mono text-[10px] text-slate-500 tracking-widest uppercase font-bold">Qirollik Devoni</div>
+                                            <div className="inline-block px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
+                                                Sana: 10 Kunlik Dekadalar
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 2. SETUP SCREEN */}
+                        {gameState === 'setup' && (
+                            <div className="max-w-3xl mx-auto w-full space-y-6 py-4 animate-fade-in">
+                                <div className="text-center space-y-1">
+                                    <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Milliy Sozlamalar</h2>
+                                    <p className="text-slate-400 text-xs">Yangi sulola taxtini mustahkamlashdan oldin parametrlarni tasdiqlang.</p>
+                                </div>
+
+                                <div className="grid md:grid-cols-2 gap-4 bg-slate-900/30 backdrop-blur-md border border-slate-800/80 p-6 rounded-2xl shadow-xl">
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Davlat Nomi</label>
+                                            <input 
+                                                type="text" 
+                                                value={country.name}
+                                                onChange={(e) => setCountry({ ...country, name: e.target.value })}
+                                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-yellow-500 text-slate-200 font-semibold"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Poytaxt Shahar</label>
+                                            <input 
+                                                type="text" 
+                                                value={country.capital}
+                                                onChange={(e) => setCountry({ ...country, capital: e.target.value })}
+                                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-yellow-500 text-slate-200"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Iqlim Turi</label>
+                                            <input 
+                                                type="text" 
+                                                value={country.climate}
+                                                onChange={(e) => setCountry({ ...country, climate: e.target.value })}
+                                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs focus:outline-none"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Aholi Soni</label>
+                                            <input 
+                                                type="number" 
+                                                value={country.population}
+                                                onChange={(e) => setCountry({ ...country, population: parseInt(e.target.value) || 0 })}
+                                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs focus:outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row items-center gap-4 justify-end pt-2">
+                                    <button 
+                                        onClick={() => { setGameState('playing'); playSound('success'); }}
+                                        className="w-full sm:w-auto px-8 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950 font-bold hover:shadow-xl transition-all text-xs"
+                                    >
+                                        Taxtga O'tirish 👑
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 3. PLAYING STATE */}
+                        {gameState === 'playing' && (
+                            <div className="space-y-4">
+                                
+                                {/* Top Navigation Tabs */}
+                                <div className="flex overflow-x-auto gap-1 p-1 bg-slate-950/80 rounded-xl border border-slate-900">
+                                    <button 
+                                        onClick={() => { setActiveTab('dashboard'); playSound('click'); }}
+                                        className={`flex-1 min-w-[120px] px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-gradient-to-r from-indigo-900 to-indigo-850 border border-indigo-500/30 text-white' : 'text-slate-400 hover:text-white'}`}
+                                    >
+                                        📊 Strategik Boshqaruv
+                                    </button>
+                                    <button 
+                                        onClick={() => { setActiveTab('cabinet'); playSound('click'); }}
+                                        className={`flex-1 min-w-[120px] px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'cabinet' ? 'bg-gradient-to-r from-indigo-900 to-indigo-850 border border-indigo-500/30 text-white' : 'text-slate-400 hover:text-white'}`}
+                                    >
+                                        💬 Maslahatxon (AI Cabinet)
+                                    </button>
+                                    <button 
+                                        onClick={() => { setActiveTab('decree'); playSound('click'); }}
+                                        className={`flex-1 min-w-[120px] px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'decree' ? 'bg-gradient-to-r from-indigo-900 to-indigo-850 border border-indigo-500/30 text-white' : 'text-slate-400 hover:text-white'}`}
+                                    >
+                                        📜 Erkin Farmon (AI Law)
+                                    </button>
+                                </div>
+
+                                {/* TAB CONTENT: 1. DASHBOARD */}
+                                {activeTab === 'dashboard' && (
+                                    <div className="grid lg:grid-cols-12 gap-6 animate-fade-in">
+                                        
+                                        <div className="lg:col-span-4 space-y-4">
+                                            
+                                            {/* Calendar & Time */}
+                                            <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/80 backdrop-blur-md relative overflow-hidden shadow-xl">
+                                                <h3 className="text-xs font-bold text-slate-100 flex items-center gap-2">
+                                                    <span>📅</span> {currentYear}-yil, {OY_NOMlARI[currentMonthIdx]} oyi
+                                                </h3>
+                                                <p className="text-[10px] text-amber-500 font-mono mt-1 font-bold">
+                                                    Dekada: {currentDecade === 1 ? 'Boshi (1-10 kun)' : currentDecade === 2 ? "O'rtasi (11-20 kun)" : "Oxiri (21-30 kun)"}
+                                                </p>
+                                            </div>
+
+                                            {/* Factions Satisfaction */}
+                                            <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/80 backdrop-blur-md space-y-3 shadow-xl">
+                                                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                                    ⚖️ Siyosiy Lobbi Guruhlari
+                                                </h4>
+                                                <div className="space-y-2">
+                                                    {[
+                                                        { key: 'harbiylar', label: '⚔️ Harbiylar', color: 'bg-rose-500' },
+                                                        { key: 'oligarxlar', label: '💰 Oligarxlar & Biznes', color: 'bg-amber-500' },
+                                                        { key: 'oddiyXalq', label: '👥 Oddiy Xalq', color: 'bg-blue-500' },
+                                                        { key: 'yoshlar', label: '🚀 Yoshlar & IT', color: 'bg-indigo-500' }
+                                                    ].map(f => (
+                                                        <div key={f.key} className="space-y-0.5">
+                                                            <div className="flex justify-between text-[10px]">
+                                                                <span className="text-slate-300">{f.label}</span>
+                                                                <span className="font-mono font-bold text-slate-200">
+                                                                    {factions[f.key]}%
+                                                                </span>
+                                                            </div>
+                                                            <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
+                                                                <div className={`h-full ${f.color} rounded-full`} style={{ width: `${factions[f.key]}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Budjet Slayderlari */}
+                                            <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/80 backdrop-blur-md space-y-3 shadow-xl">
+                                                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                                    ⚙️ Soliqlar & Budjet Slayderi
+                                                </h4>
+                                                
+                                                <div className="space-y-3 pt-1">
+                                                    <div>
+                                                        <div className="flex justify-between text-[10px] mb-1">
+                                                            <span className="text-slate-300">Yagona soliq stavkasi</span>
+                                                            <span className="font-mono text-yellow-400 font-bold">{sliders.soliqRate}%</span>
+                                                        </div>
+                                                        <input 
+                                                            type="range" min="5" max="45" 
+                                                            value={sliders.soliqRate} 
+                                                            onChange={(e) => handleSliderChange('soliqRate', e.target.value)}
+                                                            className="w-full accent-yellow-500 h-1 bg-slate-950 rounded-lg cursor-pointer"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <div className="flex justify-between text-[10px] mb-1">
+                                                            <span className="text-slate-300">Ijtimoiy yordam</span>
+                                                            <span className="font-mono text-indigo-400 font-bold">{sliders.ijtimoiyHimoya}%</span>
+                                                        </div>
+                                                        <input 
+                                                            type="range" min="5" max="40" 
+                                                            value={sliders.ijtimoiyHimoya} 
+                                                            onChange={(e) => handleSliderChange('ijtimoiyHimoya', e.target.value)}
+                                                            className="w-full accent-indigo-500 h-1 bg-slate-950 rounded-lg cursor-pointer"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                        </div>
+
+                                        <div className="lg:col-span-8 space-y-4">
+                                            
+                                            {/* Micro Bills */}
+                                            <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/80 backdrop-blur-md shadow-xl">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <span className="text-[8px] font-mono tracking-widest uppercase text-yellow-500 font-bold">10 KUNLIK TEZKOR TASHABBUS</span>
+                                                    <span className="text-[9px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded">Tezkor chora</span>
+                                                </div>
+                                                
+                                                <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-900 text-xs text-slate-300 leading-relaxed mb-3">
+                                                    "{activeBill.text}"
+                                                </div>
+
+                                                <div className="flex gap-2 justify-end">
+                                                    <button 
+                                                        disabled={billHandled}
+                                                        onClick={() => handleBillDecision(false)}
+                                                        className="px-4 py-2 rounded-lg text-[11px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-400"
+                                                    >
+                                                        Rad etish ❌
+                                                    </button>
+                                                    <button 
+                                                        disabled={billHandled}
+                                                        onClick={() => handleBillDecision(true)}
+                                                        className="px-4 py-2 rounded-lg text-[11px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400"
+                                                    >
+                                                        Tasdiqlash ✓
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Main Geopolitical Incident */}
+                                            <div className="p-6 rounded-2xl bg-slate-900/30 border border-slate-800/80 backdrop-blur-md relative overflow-hidden shadow-2xl">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center text-xl shadow-lg">
+                                                            {currentIncident.icon || '⚠️'}
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-mono uppercase tracking-widest text-yellow-500 font-bold">{currentIncident.category}</span>
+                                                            <h3 className="text-base font-extrabold text-slate-100">{currentIncident.title}</h3>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <p className="text-slate-300 text-xs md:text-sm leading-relaxed mb-6 bg-slate-950/30 p-4 rounded-xl border border-slate-900">
+                                                    {currentIncident.desc}
+                                                </p>
+
+                                                <div className="space-y-4">
+                                                    <label className="block text-[9px] font-bold uppercase tracking-wider text-indigo-400">Yechimlardan birini tanlang yoki erkin qaror yozing:</label>
+                                                    
+                                                    <div className="grid gap-2">
+                                                        {currentIncident.options?.map((opt, i) => (
+                                                            <button 
+                                                                key={i}
+                                                                onClick={() => { setDecision(opt.text); playSound('click'); }}
+                                                                className={`w-full text-left p-3 rounded-xl border transition-all text-xs ${
+                                                                    decision === opt.text 
+                                                                        ? 'bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border-yellow-500 text-yellow-100' 
+                                                                        : 'bg-slate-950/60 border-slate-800/80 text-slate-300'
+                                                                }`}
+                                                            >
+                                                                <span className="font-bold text-slate-400 text-[8px] uppercase block">Variant {i + 1}</span>
+                                                                <span>{opt.text}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between pt-2">
+                                                        <button 
+                                                            onClick={() => handleSimulation(decision)}
+                                                            disabled={isLoading || !decision.trim()}
+                                                            className="px-6 py-3 rounded-xl font-bold text-xs bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950"
+                                                        >
+                                                            {isLoading ? 'Simulyatsiya...' : 'Qarorni Imzolash ⚡'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* TAB CONTENT: 2. CABINET LIVE CHAT */}
+                                {activeTab === 'cabinet' && (
+                                    <div className="grid lg:grid-cols-12 gap-6 animate-fade-in">
+                                        
+                                        {/* Left side Advisors List */}
+                                        <div className="lg:col-span-4 space-y-3">
+                                            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800 space-y-2">
+                                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">🏛️ Virtual Kabinet</h3>
+                                            </div>
+                                            
+                                            <div className="space-y-2">
+                                                {cabinetAdvisors.map((adv) => {
+                                                    const isActive = selectedAdvisor.key === adv.key;
+                                                    return (
+                                                        <button
+                                                            key={adv.key}
+                                                            onClick={() => { setSelectedAdvisor(adv); playSound('click'); }}
+                                                            className={`w-full p-3 rounded-xl border text-left transition-all flex items-center gap-3 ${isActive ? 'bg-indigo-950/40 border-indigo-500/40' : 'bg-slate-900/20 border-slate-850'}`}
+                                                        >
+                                                            <span className="text-2xl">{adv.emoji}</span>
+                                                            <div className="flex-1 min-w-0">
+                                                                <h4 className="text-xs font-bold text-slate-200 truncate">{adv.name}</h4>
+                                                                <p className="text-[10px] text-slate-500">{adv.role}</p>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Right side Advisor Chat Window */}
+                                        <div className="lg:col-span-8 flex flex-col h-[520px] rounded-2xl border border-slate-800 bg-slate-950/60 backdrop-blur-md relative overflow-hidden">
+                                            
+                                            {/* Chat header */}
+                                            <div className="p-4 border-b border-slate-900 bg-slate-900/20 flex items-center justify-between">
+                                                <div className="flex items-center gap-2.5">
+                                                    <span className="text-2xl">{selectedAdvisor.emoji}</span>
+                                                    <div>
+                                                        <h3 className="text-xs font-bold text-slate-200">{selectedAdvisor.name}</h3>
+                                                        <p className="text-[10px] text-indigo-400">{selectedAdvisor.role}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Messages box */}
+                                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                                <div className="p-3.5 rounded-xl bg-slate-900/40 border border-slate-850 text-xs text-slate-300 max-w-[85%]">
+                                                    <strong>{selectedAdvisor.name}:</strong> {selectedAdvisor.welcome}
+                                                </div>
+
+                                                {(chatHistory[selectedAdvisor.key] || []).map((msg, idx) => {
+                                                    const isUser = msg.role === 'user';
+                                                    return (
+                                                        <div key={idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                                                            <div className={`p-3.5 rounded-xl text-xs max-w-[85%] border ${isUser ? 'bg-indigo-950/40 border-indigo-500/20 text-indigo-100' : 'bg-slate-900/40 border-slate-850 text-slate-300'}`}>
+                                                                <strong>{isUser ? "Hukmdor" : selectedAdvisor.name}:</strong> {msg.text}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                <div ref={chatEndRef} />
+                                            </div>
+
+                                            {/* Chat input form */}
+                                            <div className="p-4 border-t border-slate-900 bg-slate-900/10 flex gap-2">
+                                                <input 
+                                                    type="text"
+                                                    placeholder={`${selectedAdvisor.name}ga buyruq yoki savol yo'llang...`}
+                                                    value={chatInput}
+                                                    onChange={(e) => setChatInput(e.target.value)}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') handleAdvisorChat(); }}
+                                                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-200 focus:outline-none"
+                                                />
+                                                <button
+                                                    onClick={handleAdvisorChat}
+                                                    className="px-5 py-3 rounded-xl bg-indigo-600 text-xs font-bold"
+                                                >
+                                                    Yuborish
+                                                </button>
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+                                )}
+
+                                {/* TAB CONTENT: 3. CUSTOM DECREE ENGINE */}
+                                {activeTab === 'decree' && (
+                                    <div className="max-w-3xl mx-auto w-full space-y-6 py-2 animate-fade-in">
+                                        <div className="p-6 rounded-2xl bg-slate-900/30 border border-slate-800/80 backdrop-blur-md space-y-4 shadow-2xl relative overflow-hidden">
+                                            <h3 className="text-base font-extrabold text-slate-200">📜 Erkin Qonun Loyihasini Imzolash</h3>
+                                            <p className="text-xs text-slate-400">
+                                                Siz o'zingiz istagan har qanday farmonni erkin matn shaklida yozishingiz mumkin. Sun'iy intellekt uning ijtimoiy-iqtisodiy ta'sirini hisoblab chiqadi.
+                                            </p>
+
+                                            <div className="space-y-3">
+                                                <textarea 
+                                                    value={customDecree}
+                                                    onChange={(e) => setCustomDecree(e.target.value)}
+                                                    placeholder="Masalan: 'Barcha talabalar uchun oylik stipendiya miqdorini 2 barobarga oshiraman va bunga mablag'ni soliq stavkalarini 2% ga oshirish evaziga qoplayman...'"
+                                                    rows={4}
+                                                    className="w-full bg-slate-950 border border-slate-850 rounded-xl p-4 text-xs focus:outline-none text-slate-200"
+                                                />
+
+                                                <div className="flex justify-end">
+                                                    <button
+                                                        onClick={handleCustomDecreeSubmit}
+                                                        disabled={isDecreeLoading || !customDecree.trim()}
+                                                        className="px-6 py-3 rounded-xl font-bold text-xs bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950"
+                                                    >
+                                                        {isDecreeLoading ? "AI tahlil qilmoqda..." : "Farmonni E'lon Qilish ✨"}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {decreeResult && (
+                                            <div className="p-6 rounded-2xl bg-slate-900/40 border border-indigo-500/25 space-y-4 animate-slide-in">
+                                                <h4 className="text-xs font-black text-yellow-500">{decreeResult.headline}</h4>
+                                                <p className="text-xs text-slate-300 leading-relaxed p-4 rounded-xl bg-slate-950/60 border border-slate-900">
+                                                    {decreeResult.summary}
+                                                </p>
+
+                                                <div className="flex justify-end gap-2">
+                                                    <button 
+                                                        onClick={() => setDecreeResult(null)}
+                                                        className="px-4 py-2 rounded-lg text-xs font-bold border border-slate-800 text-slate-400"
+                                                    >
+                                                        Bekor Qilish
+                                                    </button>
+                                                    <button 
+                                                        onClick={applyDecreeImpact}
+                                                        className="px-6 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-slate-950"
+                                                    >
+                                                        O'zgarishlarni Tatbiq Etish ✓
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                            </div>
+                        )}
+
+                        {/* 4. LEDGER REPORT */}
+                        {gameState === 'ledger' && ledgerReport && (
+                            <div className="max-w-2xl mx-auto w-full p-6 rounded-2xl bg-slate-900/30 border border-slate-800/80 backdrop-blur-md space-y-6 shadow-2xl animate-fade-in">
+                                <h2 className="text-xl font-black text-center">📊 Oylik G'azna Balansi</h2>
+                                <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-900 space-y-3 font-mono text-xs">
+                                    <div className="flex justify-between border-b border-slate-800 pb-2">
+                                        <span>SOLIQ TUSHUMLARI (+)</span>
+                                        <span className="text-emerald-400">+{ledgerReport.soliqRevenue} SUM</span>
+                                    </div>
+                                    <div className="flex justify-between text-rose-400">
+                                        <span>XARAJATLAR (-)</span>
+                                        <span>-{ledgerReport.ijtimoiyCost + ledgerReport.harbiyCost + ledgerReport.talimCost} SUM</span>
+                                    </div>
+                                    <div className="flex justify-between pt-1 text-sm font-bold border-t border-slate-800">
+                                        <span>NET BALANS</span>
+                                        <span className={ledgerReport.netBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                                            {ledgerReport.netBalance >= 0 ? '+' : ''}{ledgerReport.netBalance} SUM
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end">
+                                    <button 
+                                        onClick={generateNextIncident}
+                                        className="px-6 py-3 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950 font-extrabold text-xs"
+                                    >
+                                        Yangi Turnni Boshlash ➡️
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 5. DECISION RESULT */}
+                        {gameState === 'result' && consequences && (
+                            <div className="space-y-6 animate-fade-in max-w-3xl mx-auto">
+                                <div className="p-6 rounded-2xl bg-slate-900/30 border border-slate-800/80 backdrop-blur-md text-center space-y-3">
+                                    <span className="text-[9px] font-mono uppercase text-emerald-400">Oliy Kengash Bahosi</span>
+                                    <h2 className="text-xl font-extrabold">Qaror Oqibatlari</h2>
+                                    <p className="text-slate-300 text-xs md:text-sm leading-relaxed p-4 rounded-xl bg-slate-950/50 border border-slate-900 text-left">
+                                        {consequences.summary}
+                                    </p>
+                                </div>
+
+                                <div className="flex justify-end">
+                                    <button 
+                                        onClick={generateNextIncident}
+                                        className="px-8 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950 font-bold text-xs"
+                                    >
+                                        Navbatdagi Dekadani Boshlash ➡️
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 6. GAME OVER STATUS */}
+                        {gameState === 'gameover' && consequences && (
+                            <div className="max-w-2xl mx-auto w-full py-8 space-y-6 text-center animate-fade-in">
+                                <h2 className="text-2xl font-black text-rose-500">{consequences.title}</h2>
+                                <div className="p-6 rounded-2xl bg-slate-900/30 border border-slate-800/80 backdrop-blur-md space-y-4 shadow-2xl">
+                                    <p className="text-slate-300 text-xs md:text-sm leading-relaxed text-left bg-slate-950/60 p-4 rounded-xl border border-slate-900">
+                                        {consequences.description}
+                                    </p>
+                                </div>
+                                <button 
+                                    onClick={handleResetGame}
+                                    className="px-8 py-3 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950 font-extrabold text-xs"
+                                >
+                                    Qayta Taxtga O'tirish 🔄
+                                </button>
+                            </div>
+                        )}
+
+                    </main>
+
+                    <footer className="border-t border-slate-900 p-4 text-center text-[9px] text-slate-500 bg-slate-950/60 backdrop-blur-md">
+                        <p>Bu AI tomonidan yaratilgan xayoliy davlat boshqaruvi simulyatsiyasidir. Undagi voqealar, qarorlar va natijalar haqiqiy siyosiy, iqtisodiy yoki huquqiy maslahat emas.</p>
+                        <p className="mt-1 font-mono text-indigo-500 font-bold">© 2026 Qirol Simulator PRO. Barcha huquqlar himoyalangan.</p>
+                    </footer>
+
+                </div>
+            );
+        }
+
+        // React ilovani HTML dagi 'root' divga o'rnatish
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
